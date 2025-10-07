@@ -27,7 +27,7 @@ data "vsphere_datacenter" "dc" {
 
 # No cluster: point to the ESXi host and use its default resource pool
 data "vsphere_host" "esxi" {
-  name          = "vsphere4.mxferguson.com"   # <-- change if your ESXi host name differs
+  name          = "vsphere1.mxferguson.com"   # <-- change if your ESXi host name differs
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
@@ -52,7 +52,8 @@ data "vsphere_virtual_machine" "tmpl" {
 # Virtual Machine
 # -----------------------------
 resource "vsphere_virtual_machine" "vm" {
-  name             = "vsphere1"  # VM display name; FQDN will be vsphere1.mxferguson.com via customization
+  # name             = "vsphere1"  # VM display name; FQDN will be vsphere1.mxferguson.com via customization
+  name = "ubuntu22-test-tf-1"
   resource_pool_id = data.vsphere_host.esxi.resource_pool_id
   datastore_id     = data.vsphere_datastore.ds.id
 
@@ -87,9 +88,12 @@ resource "vsphere_virtual_machine" "vm" {
         host_name = "vsphere1"
         domain    = "mxferguson.com"
       }
+
+      network_interface {}
+
       # DHCP networking
       dns_server_list = ["10.3.0.151", "10.3.0.152"]
-      ipv4_gateway    = null
+      ipv4_gateway    = "10.4.5.1"
     }
   }
 }

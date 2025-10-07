@@ -88,7 +88,7 @@ resource "vsphere_virtual_machine" "vm" {
         domain    = "mxferguson.com"
       }
       # DHCP networking
-      dns_server_list = ["8.8.8.8", "1.1.1.1"]
+      dns_server_list = ["10.3.0.151", "10.3.0.152"]
       ipv4_gateway    = null
     }
   }

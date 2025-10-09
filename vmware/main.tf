@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.6.0"
   required_providers {
     vsphere = {
-      source  = "hashicorp/vsphere"
+      source  = "vmware/vsphere" # updated source
       version = "~> 2.6"
     }
   }
@@ -25,9 +25,8 @@ data "vsphere_datacenter" "dc" {
   name = "lab"
 }
 
-# No cluster: point to the ESXi host and use its default resource pool
 data "vsphere_host" "esxi" {
-  name          = "vsphere1.mxferguson.com"   # <-- change if your ESXi host name differs
+  name          = "vsphere1.mxferguson.com"
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
@@ -36,13 +35,11 @@ data "vsphere_datastore" "ds" {
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
-# Must match the portgroup's exact name
 data "vsphere_network" "net" {
   name          = "DPortGroup-250"
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
-# Ubuntu TEMPLATE (not just a powered-off VM)
 data "vsphere_virtual_machine" "tmpl" {
   name          = "ubuntu22-docker-template"
   datacenter_id = data.vsphere_datacenter.dc.id
@@ -52,48 +49,48 @@ data "vsphere_virtual_machine" "tmpl" {
 # Virtual Machine
 # -----------------------------
 resource "vsphere_virtual_machine" "vm" {
-  # name             = "vsphere1"  # VM display name; FQDN will be vsphere1.mxferguson.com via customization
-  name = "ubuntu22-test-tf-1"
-  resource_pool_id = data.vsphere_host.esxi.resource_pool_id
-  datastore_id     = data.vsphere_datastore.ds.id
+  name             = "ubuntu22-test-tf-1"                    # REQUIRED
+  resource_pool_id = data.vsphere_host.esxi.resource_pool_id # REQUIRED
+  datastore_id     = data.vsphere_datastore.ds.id            # REQUIRED
 
-  # Compute
-  num_cpus = 4
-  memory   = 8192  # MB (8 GB)
-
-  # Guest & hardware from template
+  num_cpus  = 4
+  memory    = 8192
   guest_id  = data.vsphere_virtual_machine.tmpl.guest_id
   scsi_type = data.vsphere_virtual_machine.tmpl.scsi_type
 
-  # Networking
+  # Don’t block on IP while debugging
+  wait_for_guest_ip_timeout   = 0
+  wait_for_guest_net_timeout  = 0
+  wait_for_guest_net_routable = false
+
   network_interface {
     network_id   = data.vsphere_network.net.id
-    adapter_type = data.vsphere_virtual_machine.tmpl.network_interface_types[0]
+    adapter_type = "vmxnet3"
   }
 
-  # Disk (inherits size from template; adjust size if you want larger)
   disk {
     label            = "disk0"
     size             = data.vsphere_virtual_machine.tmpl.disks.0.size
-    eagerly_scrub    = false
     thin_provisioned = true
   }
 
-  # Clone from template with guest customization (DHCP)
   clone {
     template_uuid = data.vsphere_virtual_machine.tmpl.id
-
     customize {
       linux_options {
-        host_name = "vsphere1"
+        host_name = "ubuntu22-test-1"
         domain    = "mxferguson.com"
       }
 
-      network_interface {}
+      # Static IPv4
+      network_interface {
+        ipv4_address = "10.4.5.101" # choose a free IP
+        ipv4_netmask = 24
+      }
 
-      # DHCP networking
-      dns_server_list = ["10.3.0.151", "10.3.0.152"]
       ipv4_gateway    = "10.4.5.1"
+      dns_server_list = ["10.3.0.151", "10.3.0.152"]
+      dns_suffix_list = ["mxferguson.com"]
     }
   }
 }
@@ -101,5 +98,5 @@ resource "vsphere_virtual_machine" "vm" {
 # -----------------------------
 # Outputs
 # -----------------------------
-output "vm_name"        { value = vsphere_virtual_machine.vm.name }
+output "vm_name" { value = vsphere_virtual_machine.vm.name }
 output "vm_power_state" { value = vsphere_virtual_machine.vm.power_state }

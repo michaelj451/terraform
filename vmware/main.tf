@@ -9,45 +9,56 @@ terraform {
 }
 
 provider "vsphere" {
-  user                 = "mxferguson@mxferguson.com"
-  password             = "Xm3nbl00d"
-  vsphere_server       = "vcenter8.mxferguson.com"
+  user                 = var.vsphere_user
+  password             = var.vsphere_password
+  vsphere_server       = var.vsphere_server
   allow_unverified_ssl = true
 }
 
-data "vsphere_datacenter" "dc" { name = "lab" }
+# Lookups
+data "vsphere_datacenter" "dc" {
+  name = var.datacenter
+}
 
 data "vsphere_host" "esxi" {
-  name          = "vsphere1.mxferguson.com"
+  name          = var.esxi_host
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
 data "vsphere_datastore" "ds" {
-  name          = "iscsi-disk-4.1"
+  name          = var.datastore
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
 data "vsphere_network" "net" {
-  name          = "DPortGroup-250"
+  name          = var.network
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
 data "vsphere_virtual_machine" "tmpl" {
-  name          = "ubuntu22-docker-template"
+  name          = var.template
   datacenter_id = data.vsphere_datacenter.dc.id
 }
 
+# Create many VMs from the list
 resource "vsphere_virtual_machine" "vm" {
-  name             = "ubuntu22-test-tf-1"
+  for_each = { for vm in var.vms : vm.name => vm }
+
+  name             = each.value.name
   resource_pool_id = data.vsphere_host.esxi.resource_pool_id
   datastore_id     = data.vsphere_datastore.ds.id
 
-  num_cpus  = 4
-  memory    = 8192
+  # Compute (use template defaults; tweak if desired)
+  num_cpus = 4
+  memory   = 8192
+  # If you enabled per-VM overrides in variables.tf, use:
+  # num_cpus = try(each.value.cpu, 4)
+  # memory   = try(each.value.memory, 8192)
+
   guest_id  = data.vsphere_virtual_machine.tmpl.guest_id
   scsi_type = data.vsphere_virtual_machine.tmpl.scsi_type
 
-  # while debugging, don't block on IP
+  # Don’t block on IP during creation; useful while testing
   wait_for_guest_ip_timeout   = 0
   wait_for_guest_net_timeout  = 0
   wait_for_guest_net_routable = false
@@ -65,22 +76,31 @@ resource "vsphere_virtual_machine" "vm" {
 
   clone {
     template_uuid = data.vsphere_virtual_machine.tmpl.id
+
     customize {
       linux_options {
-        host_name = "ubuntu22-test-1"
-        domain    = "mxferguson.com"
+        host_name = each.value.name
+        domain    = var.domain
       }
 
-      # ---- DHCP (one block per NIC) ----
-      network_interface {}
+      # Static IP for each VM from the list
+      network_interface {
+        ipv4_address = each.value.ip
+        ipv4_netmask = var.netmask_bits
+      }
 
-      # optional: keep custom DNS even with DHCP
-      dns_server_list = ["10.3.0.151", "10.3.0.152"]
-
-      # IMPORTANT: no ipv4_gateway or ipv4_address/ipv4_netmask here
+      ipv4_gateway    = var.gateway
+      dns_server_list = var.dns_servers
+      dns_suffix_list = [var.domain]
     }
   }
 }
 
-output "vm_name"        { value = vsphere_virtual_machine.vm.name }
-output "vm_power_state" { value = vsphere_virtual_machine.vm.power_state }
+# Helpful outputs
+output "vm_ids" {
+  value = { for k, v in vsphere_virtual_machine.vm : k => v.id }
+}
+
+output "vm_ips" {
+  value = { for k, v in vsphere_virtual_machine.vm : k => v.default_ip_address }
+}

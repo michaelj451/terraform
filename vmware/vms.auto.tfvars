@@ -26,7 +26,9 @@ domain       = "mxferguson.com"
 # VM definitions
 # -----------------------------
 vms = [
-  { name = "ubuntu22-test-1", ip = "10.4.5.101" },
-  { name = "ubuntu22-test-2", ip = "10.4.5.102" },
-  { name = "ubuntu22-test-3", ip = "10.4.5.103" }
+  { name = "ubuntu22-k8s-auto-1", ip = "10.4.5.101" },
+  { name = "ubuntu22-k8s-auto-2", ip = "10.4.5.102" },
+  { name = "ubuntu22-k8s-auto-3", ip = "10.4.5.103" },
+  { name = "ubuntu22-k8s-auto-4", ip = "10.4.5.104" },
+  { name = "ubuntu22-rancher-auto", ip = "10.4.5.111" }
 ]
